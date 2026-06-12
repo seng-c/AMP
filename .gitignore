@@ -1,5 +1,9 @@
 test/
 train/
+train_all/
+train_extra_onsets/
 .idea/
 *.json
 *.DS_Store
+*.zip
+*.txt

@@ -69,8 +69,6 @@ def detect_everything(filename, options):
     # only keep the magnitude
     magspect = np.abs(spect)
 
-
-
     # compute a mel spectrogram
     melspect = librosa.feature.melspectrogram(
             S=magspect, sr=sample_rate, n_mels=80, fmin=27.5, fmax=8000)
@@ -169,7 +167,7 @@ def log_filt_spec_flux(sample_rate, signal, fps, spect, magspect, melspect, opti
     # convert to magnitude
     sem_spect = np.sqrt(sem_spect)
     # convert to logarithmic magnitude
-    lambda_par = 10
+    lambda_par = 15
     sem_spect = np.log1p(lambda_par * sem_spect)
 
     # Detection Function
@@ -195,7 +193,7 @@ def detect_onsets_phase_difference(odf_rate, odf, options):
     window_size = np.ones(10) / 10
     peaks_smoothed = np.convolve(odf, window_size, mode='same')
     # detect peaks in odf using standard deviation as delta
-    delta = 0.3 * np.std(odf)
+    delta = 0.19 * np.std(odf)
     peaks = np.where((odf[1:-1] > odf[:-2])
                      & (odf[1:-1] > odf[2:])
                      & (odf[1:-1] > peaks_smoothed[1:-1] + delta))
@@ -211,8 +209,8 @@ def detect_onsets_phase_difference(odf_rate, odf, options):
     return onsets_minimum_gap
 
 def detect_onsets_lfsf(odf_rate, odf, options):
-    delta = 0.5
-    window_size = 10
+    delta = 0.4
+    window_size = 11
 
     # get maxima and mean in window
     local_maxima = maximum_filter(odf, window_size)
@@ -222,7 +220,6 @@ def detect_onsets_lfsf(odf_rate, odf, options):
     is_peak_maxima = odf == local_maxima
     is_peak_mean = odf >= local_mean + delta
     is_peak_mask = is_peak_maxima & is_peak_mean
-    is_peak_mask = np.atleast_1d(is_peak_mask)
     peak_frames = np.where(is_peak_mask)[0]
 
     # convert position into time domain

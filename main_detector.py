@@ -41,6 +41,10 @@ def opts_parser():
     parser.add_argument('--plot',
             action='store_true',
             help='If given, plot something for every file processed.')
+    parser.add_argument('--onset_tolerance',
+                        type=float,
+                        default=0.05,
+                        help='Tolerance for combining multiple onset detections.')
     return parser
 
 
@@ -77,21 +81,21 @@ def detect_everything(filename, options):
     melspect = np.log1p(100 * melspect)
 
     # compute onset detection function
-    odf, odf_rate = onset_detection_function(
+    odfs, odf_rate = onset_detection_function(
             sample_rate, signal, fps, spect, magspect, melspect, options)
 
     # detect onsets from the onset detection function
-    onsets = detect_onsets(odf_rate, odf, options)
+    onsets = detect_onsets(odf_rate, odfs, options)
 
     # detect tempo from everything we have
     tempo = detect_tempo(
             sample_rate, signal, fps, spect, magspect, melspect,
-            odf_rate, odf, onsets, options)
+            odf_rate, odfs, onsets, options)
 
     # detect beats from everything we have (including the tempo)
     beats = detect_beats(
             sample_rate, signal, fps, spect, magspect, melspect,
-            odf_rate, odf, onsets, tempo, options)
+            odf_rate, odfs, onsets, tempo, options)
 
     # plot some things for easier debugging, if asked for it
     if options.plot:
@@ -125,8 +129,14 @@ def onset_detection_function(sample_rate, signal, fps, spect, magspect,
     where the onsets are. Returns the function values and its sample/frame
     rate in values per second as a tuple: (values, values_per_second)
     """
-    return log_filt_spec_flux_detection_function(sample_rate, signal, fps, spect, magspect,
-                              melspect, options)
+    odf_hf, odf_rate = high_frequency_component_detection_function(sample_rate, signal, fps, spect, magspect,
+                                                                   melspect, options)
+    odf_phase_dev, _ = phase_difference_detection_function(sample_rate, signal, fps, spect, magspect,
+                                                                   melspect, options)
+    odf_lfsf, _ = log_filt_spec_flux_detection_function(sample_rate, signal, fps, spect, magspect,
+                                                                   melspect, options)
+
+    return (odf_hf, odf_phase_dev, odf_lfsf), odf_rate
 
 def high_frequency_component_detection_function(sample_rate, signal, fps, spect, magspect, melspect, options):
     energy_squared = melspect ** 2 # |X_k[t]| ^ 2
@@ -177,14 +187,62 @@ def log_filt_spec_flux_detection_function(sample_rate, signal, fps, spect, magsp
     values = np.sum(differences, axis=0)
     return values, fps
 
-def detect_onsets(odf_rate, odf, options):
+def process_onset_window(onset_group, onsets_final):
+    # count how many different onset detection methods are present
+    unique_methods = {item[1] for item in onset_group}
+
+    # if at least 2 methods agree with onset, then calculate average timestamp and use this as final onset timestamp
+    if len(unique_methods) >= 2:
+        avg_ts = np.average([item[0] for item in onset_group])
+        onsets_final.append(avg_ts)
+
+def detect_onsets(odf_rate, odfs, options):
     """
     Detect onsets in the onset detection function.
     Returns the positions in seconds.
     """
-    return detect_onsets_lfsf(odf_rate, odf, options)
+    onsets_hf = detect_onsets_stddev(odf_rate, odfs[0], options, False)
+    onsets_phase_dev = detect_onsets_stddev(odf_rate, odfs[1], options, True)
+    onsets_lfsf = detect_onsets_lfsf(odf_rate, odfs[2], options)
 
-def detect_onsets_phase_difference(odf_rate, odf, options):
+    # combine all onset timestamps into one single array
+    onsets_all = []
+    for e in onsets_hf:
+        onsets_all.append((e, 1))
+
+    for e in onsets_phase_dev:
+        onsets_all.append((e, 2))
+
+    for e in onsets_lfsf:
+        onsets_all.append((e, 3))
+
+    # sort by timestamp
+    onsets_all.sort(key=lambda t: t[0])
+
+    if len(onsets_all) == 0:
+        return []
+
+    tolerance = options.onset_tolerance
+    onsets_final = []
+
+    # combine close timestamps inside tolerance window together as one timestamp
+    cur_window = [onsets_all[0]]
+    for i in range(1, len(onsets_all)):
+        cur_tuple = onsets_all[i]
+        window_start = cur_window[0]
+
+        if cur_tuple[0] - window_start[0] < tolerance: # current timestamp is close enough to be considered the same onset
+            cur_window.append(cur_tuple)
+        else: # current timestamp not close enough, is separate timestamp
+            process_onset_window(cur_window, onsets_final)
+            cur_window = [cur_tuple]
+
+    # final window processing after loop
+    process_onset_window(cur_window, onsets_final)
+
+    return onsets_final
+
+def detect_onsets_stddev(odf_rate, odf, options, need_phase_correction):
     """
     Detect onsets in the onset detection function.
     Returns the positions in seconds.
@@ -197,8 +255,12 @@ def detect_onsets_phase_difference(odf_rate, odf, options):
     peaks = np.where((odf[1:-1] > odf[:-2])
                      & (odf[1:-1] > odf[2:])
                      & (odf[1:-1] > peaks_smoothed[1:-1] + delta))
-    # correct offset (for phase difference) and transform to seconds
-    onsets = (peaks[0] + 1.0) / odf_rate
+    # correct offset (for phase deviation necessary) and transform to seconds
+    if need_phase_correction:
+        onsets = (peaks[0] + 1.0) / odf_rate
+    else:
+        onsets = peaks[0] / odf_rate
+
     if len(onsets) == 0:
         return []
     # 50 ms pause between peaks

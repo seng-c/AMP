@@ -125,7 +125,7 @@ def onset_detection_function(sample_rate, signal, fps, spect, magspect,
     where the onsets are. Returns the function values and its sample/frame
     rate in values per second as a tuple: (values, values_per_second)
     """
-    return log_filt_spec_flux(sample_rate, signal, fps, spect, magspect,
+    return log_filt_spec_flux_detection_function(sample_rate, signal, fps, spect, magspect,
                               melspect, options)
 
 def high_frequency_component_detection_function(sample_rate, signal, fps, spect, magspect, melspect, options):
@@ -159,7 +159,7 @@ def phase_difference_detection_function(sample_rate, signal, fps, spect, magspec
     values_per_second = fps
     return values, values_per_second
 
-def log_filt_spec_flux(sample_rate, signal, fps, spect, magspect, melspect, options):
+def log_filt_spec_flux_detection_function(sample_rate, signal, fps, spect, magspect, melspect, options):
     # Preprocessing
     hop_length = sample_rate // fps
     # get semitone spectogram, returns mean-squared power
@@ -167,7 +167,7 @@ def log_filt_spec_flux(sample_rate, signal, fps, spect, magspect, melspect, opti
     # convert to magnitude
     sem_spect = np.sqrt(sem_spect)
     # convert to logarithmic magnitude
-    lambda_par = 15
+    lambda_par = 17
     sem_spect = np.log1p(lambda_par * sem_spect)
 
     # Detection Function
@@ -197,8 +197,8 @@ def detect_onsets_phase_difference(odf_rate, odf, options):
     peaks = np.where((odf[1:-1] > odf[:-2])
                      & (odf[1:-1] > odf[2:])
                      & (odf[1:-1] > peaks_smoothed[1:-1] + delta))
-    # correct offset and transform to seconds
-    onsets = (peaks[0] + 2) / odf_rate
+    # correct offset (for phase difference) and transform to seconds
+    onsets = (peaks[0] + 1.0) / odf_rate
     if len(onsets) == 0:
         return []
     # 50 ms pause between peaks
@@ -209,7 +209,7 @@ def detect_onsets_phase_difference(odf_rate, odf, options):
     return onsets_minimum_gap
 
 def detect_onsets_lfsf(odf_rate, odf, options):
-    delta = 0.4
+    delta = 0.46
     window_size = 11
 
     # get maxima and mean in window
@@ -227,6 +227,7 @@ def detect_onsets_lfsf(odf_rate, odf, options):
     if len(onsets) == 0:
         return []
 
+    # filter out peaks that are too close
     onsets_minimum_gap = [onsets[0]]
     for x in onsets[1:]:
         if x - onsets_minimum_gap[-1] >= 0.05:

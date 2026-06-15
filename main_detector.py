@@ -100,9 +100,9 @@ def detect_everything(filename, options):
     tempo = tempo[0]
 
     # set odf to a single odf out of the three calculated ones
-    # 1) high frequency content
-    # 2) phase deviation
-    # 3) lfsf
+    # 0) high frequency content
+    # 1) phase deviation
+    # 2) LFSF
     odf = odfs[2]
 
     # plot some things for easier debugging, if asked for it
@@ -316,9 +316,9 @@ def detect_tempo(sample_rate, signal, fps, spect, magspect, melspect,
     min_bpm = 50
     max_bpm = 220
     # select one of the three onset detection functions
-    # 1) high frequency content
-    # 2) phase deviation
-    # 3) LFSF
+    # 0) high frequency content
+    # 1) phase deviation
+    # 2) LFSF
     odf_signal = odf[2]
 
     # autocorrelate and take only the positive lags
@@ -350,11 +350,11 @@ def detect_beats(sample_rate, signal, fps, spect, magspect, melspect,
     Returns the positions of all beats in seconds.
     """
     # select one of the three onset detection functions
-    # 1) high frequency content
-    # 2) phase deviation
-    # 3) LFSF
+    # 0) high frequency content
+    # 1) phase deviation
+    # 2) LFSF
     odf_signal = odf[1]
-    signal_duration = (len(odf[2])-1)/odf_rate
+    signal_duration = (len(odf_signal)-1)/odf_rate
     og_tempo_idx = tempo[1]
     tempo = tempo[0][og_tempo_idx]
 
@@ -368,8 +368,9 @@ def detect_beats(sample_rate, signal, fps, spect, magspect, melspect,
     # cross correlate and take only positive lags
     cross_corr = np.correlate(odf_signal, pulse_train, mode='full')
     pos_corr = len(odf_signal)-1
-
     cross_corr_range = cross_corr[pos_corr:pos_corr+period_frames]
+
+    # pick max cross-correlation position
     best_match = np.argmax(cross_corr_range)
     best_match_sec = best_match / odf_rate
 

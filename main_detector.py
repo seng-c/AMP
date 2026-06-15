@@ -153,11 +153,11 @@ def phase_difference_detection_function(sample_rate, signal, fps, spect, magspec
     phase = np.angle(spect)/(2*np.pi)
 
     # get first order of phase
-    phase_first_order=phase[:,1:]-phase[:,:-1]
+    phase_first_order = phase[:,1:]-phase[:,:-1]
     # wrap values
     phase_first_order = ((phase_first_order + 0.5) % 1) - 0.5
     # get second order
-    phase_second_order=phase_first_order[:,1:]-phase_first_order[:,:-1]
+    phase_second_order = phase_first_order[:,1:]-phase_first_order[:,:-1]
     phase_second_order = ((phase_second_order + 0.5) % 1) - 0.5
     # get phase second order per frame over whole frequency spectrum
     pso_per_frame=np.sum(magspect[:,2:] * np.abs(phase_second_order), 0)
@@ -303,26 +303,36 @@ def detect_tempo(sample_rate, signal, fps, spect, magspect, melspect,
     Detect tempo using any of the input representations.
     Returns one tempo or two tempo estimations.
     """
-    # we only have a dumb dummy implementation here.
-    # it uses the time difference between the first two onsets to
-    # define the tempo, and returns half of that as a second guess.
-    # this is not a useful solution at all, just a placeholder.
-    min_bpm=60
-    max_bpm=200
-    odf_signal=odf[2]
-    autocorrelation=np.correlate(odf_signal,odf_signal,mode='full')
-    autocorrelation=autocorrelation [len(odf_signal)-1:]
+    # set expected/viable BPM range
+    min_bpm = 60
+    max_bpm = 200
+    # select one of the three onset detection functions
+    # 1) high frequency content
+    # 2) phase deviation
+    # 3) LFSF
+    odf_signal = odf[2]
+
+    autocorrelation = np.correlate(odf_signal, odf_signal, mode='full')
+    autocorrelation = autocorrelation[len(odf_signal)-1:]
+
+    # convert to frame domain
     min_lag = int(odf_rate * 60 / max_bpm)
     max_lag = int(odf_rate * 60 / min_bpm)
-    lag_range=autocorrelation[min_lag:max_lag]
-    prob_peak=np.argmax(lag_range)+min_lag
-    tempo_est=60/(prob_peak/odf_rate)
-    if tempo_est<120:
-        tempo=tempo_est*2
-    else:
-        tempo=tempo_est
 
-    return [tempo / 2, tempo]
+    # get peak in relevant BPM interval
+    lag_range = autocorrelation[min_lag:max_lag]
+    prob_peak = np.argmax(lag_range) + min_lag
+
+    # convert to BPM
+    tempo_est = 60 / (prob_peak/odf_rate)
+
+    # consider errors where tempo is halved/doubled
+    if tempo_est < 120:
+        tempo = tempo_est * 2
+    else:
+        tempo = tempo_est
+
+    return [tempo/2, tempo]
 
 
 def detect_beats(sample_rate, signal, fps, spect, magspect, melspect,
@@ -331,9 +341,6 @@ def detect_beats(sample_rate, signal, fps, spect, magspect, melspect,
     Detect beats using any of the input representations.
     Returns the positions of all beats in seconds.
     """
-    # we only have a dumb dummy implementation here.
-    # it returns every 10th onset as a beat.
-    # this is not a useful solution at all, just a placeholder.
     interval=(60/tempo[1])
     duration=(len(odf[2]))-1/odf_rate
     period_frames=int(np.round(interval*odf_rate))

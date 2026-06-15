@@ -97,6 +97,9 @@ def detect_everything(filename, options):
             sample_rate, signal, fps, spect, magspect, melspect,
             odf_rate, odfs, onsets, tempo, options)
 
+    # set tempo to be only the tempo without index of original tempo estimation
+    tempo = tempo[0]
+
     # plot some things for easier debugging, if asked for it
     if options.plot:
         import matplotlib.pyplot as plt
@@ -250,11 +253,13 @@ def detect_onsets_stddev(odf_rate, odf, options, need_phase_correction):
     # smooth odf by convolving over function
     window_size = np.ones(10) / 10
     peaks_smoothed = np.convolve(odf, window_size, mode='same')
+
     # detect peaks in odf using standard deviation as delta
     delta = 0.19 * np.std(odf)
     peaks = np.where((odf[1:-1] > odf[:-2])
                      & (odf[1:-1] > odf[2:])
                      & (odf[1:-1] > peaks_smoothed[1:-1] + delta))
+
     # correct offset (for phase deviation necessary) and transform to seconds
     if need_phase_correction:
         onsets = (peaks[0] + 1.0) / odf_rate
@@ -263,6 +268,7 @@ def detect_onsets_stddev(odf_rate, odf, options, need_phase_correction):
 
     if len(onsets) == 0:
         return []
+
     # 50 ms pause between peaks
     onsets_minimum_gap = [onsets[0]]
     for x in onsets[1:]:
@@ -301,7 +307,7 @@ def detect_tempo(sample_rate, signal, fps, spect, magspect, melspect,
                  odf_rate, odf, onsets, options):
     """
     Detect tempo using any of the input representations.
-    Returns one tempo or two tempo estimations.
+    Returns one tempo or two tempo estimations (and which one is the original estimation).
     """
     # set expected/viable BPM range
     min_bpm = 60
@@ -312,15 +318,16 @@ def detect_tempo(sample_rate, signal, fps, spect, magspect, melspect,
     # 3) LFSF
     odf_signal = odf[2]
 
-    autocorrelation = np.correlate(odf_signal, odf_signal, mode='full')
-    autocorrelation = autocorrelation[len(odf_signal)-1:]
+    # autocorrelate and take only the positive lags
+    auto_corr = np.correlate(odf_signal, odf_signal, mode='full')
+    auto_corr = auto_corr[len(odf_signal)-1:]
 
     # convert to frame domain
     min_lag = int(odf_rate * 60 / max_bpm)
     max_lag = int(odf_rate * 60 / min_bpm)
 
     # get peak in relevant BPM interval
-    lag_range = autocorrelation[min_lag:max_lag]
+    lag_range = auto_corr[min_lag:max_lag+1]
     prob_peak = np.argmax(lag_range) + min_lag
 
     # convert to BPM
@@ -328,9 +335,9 @@ def detect_tempo(sample_rate, signal, fps, spect, magspect, melspect,
 
     # consider errors where tempo is halved/doubled
     if tempo_est*2 < max_bpm:
-        return [tempo_est, tempo_est*2]
+        return [tempo_est, tempo_est * 2], 0
     else:
-        return [tempo_est/2, tempo_est]
+        return [tempo_est / 2, tempo_est], 1
 
 
 def detect_beats(sample_rate, signal, fps, spect, magspect, melspect,
@@ -339,18 +346,31 @@ def detect_beats(sample_rate, signal, fps, spect, magspect, melspect,
     Detect beats using any of the input representations.
     Returns the positions of all beats in seconds.
     """
-    interval=(60/tempo[1])
-    duration=(len(odf[2]))-1/odf_rate
-    period_frames=int(np.round(interval*odf_rate))
-    pulse_train=np.zeros_like(odf[2])
-    pulse_train[::period_frames]=1.0
-    xcorr=np.correlate(odf[2],pulse_train,mode='full')
-    pos_corr=len(odf[2])-1
-    corr_range=xcorr[pos_corr:pos_corr+period_frames]
-    best_match=np.argmax(corr_range)
-    first=best_match/odf_rate
+    # select one of the three onset detection functions
+    # 1) high frequency content
+    # 2) phase deviation
+    # 3) LFSF
+    odf_signal = odf[1]
+    signal_duration = (len(odf[2])-1)/odf_rate
+    og_tempo_idx = tempo[1]
+    tempo = tempo[0][og_tempo_idx]
 
-    all_beats=np.arange(first,duration,interval)
+    interval = (60 / tempo)
+    period_frames = int(np.round(interval * odf_rate))
+
+    # create pulse train
+    pulse_train = np.zeros_like(odf_signal)
+    pulse_train[::period_frames] = 1.0
+
+    # cross correlate and take only positive lags
+    cross_corr = np.correlate(odf_signal, pulse_train, mode='full')
+    pos_corr = len(odf_signal)-1
+
+    cross_corr_range = cross_corr[pos_corr:pos_corr+period_frames]
+    best_match = np.argmax(cross_corr_range)
+    best_match_sec = best_match / odf_rate
+
+    all_beats = np.arange(best_match_sec, signal_duration, interval)
     return all_beats
 
 

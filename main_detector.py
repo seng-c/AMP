@@ -308,14 +308,14 @@ def detect_tempo(sample_rate, signal, fps, spect, magspect, melspect,
     # define the tempo, and returns half of that as a second guess.
     # this is not a useful solution at all, just a placeholder.
     min_bpm=60
-    max_bpm=240
+    max_bpm=200
     odf_signal=odf[2]
     autocorrelation=np.correlate(odf_signal,odf_signal,mode='full')
     autocorrelation=autocorrelation [len(odf_signal)-1:]
     min_lag = int(odf_rate * 60 / max_bpm)
     max_lag = int(odf_rate * 60 / min_bpm)
-    range=autocorrelation[min_lag:max_lag]
-    prob_peak=np.argmax(range)+min_lag
+    lag_range=autocorrelation[min_lag:max_lag]
+    prob_peak=np.argmax(lag_range)+min_lag
     tempo_est=60/(prob_peak/odf_rate)
     if tempo_est<120:
         tempo=tempo_est*2
@@ -334,10 +334,18 @@ def detect_beats(sample_rate, signal, fps, spect, magspect, melspect,
     # we only have a dumb dummy implementation here.
     # it returns every 10th onset as a beat.
     # this is not a useful solution at all, just a placeholder.
-    interval=(60/tempo[0])
-    first=onsets[0]
-    last=(len(odf[2])-1)/odf_rate
-    all_beats=np.arange(first,last,interval)
+    interval=(60/tempo[1])
+    duration=(len(odf[2]))-1/odf_rate
+    period_frames=int(np.round(interval*odf_rate))
+    pulse_train=np.zeros_like(odf[2])
+    pulse_train[::period_frames]=1.0
+    xcorr=np.correlate(odf[2],pulse_train,mode='full')
+    pos_corr=len(odf[2])-1
+    corr_range=xcorr[pos_corr:pos_corr+period_frames]
+    best_match=np.argmax(corr_range)
+    first=best_match/odf_rate
+
+    all_beats=np.arange(first,duration,interval)
     return all_beats
 
 

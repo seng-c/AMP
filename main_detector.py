@@ -327,12 +327,10 @@ def detect_tempo(sample_rate, signal, fps, spect, magspect, melspect,
     tempo_est = 60 / (prob_peak/odf_rate)
 
     # consider errors where tempo is halved/doubled
-    if tempo_est < 120:
-        tempo = tempo_est * 2
+    if tempo_est*2 < max_bpm:
+        return [tempo_est, tempo_est*2]
     else:
-        tempo = tempo_est
-
-    return [tempo/2, tempo]
+        return [tempo_est/2, tempo_est]
 
 
 def detect_beats(sample_rate, signal, fps, spect, magspect, melspect,

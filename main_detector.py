@@ -9,7 +9,12 @@ For usage information, call with --help.
 Author: Jan Schlüter
 """
 
-import sys
+# Execution environment:
+# miniconda with the following packages
+# - numpy
+# - librosa
+# - mir_eval
+
 from pathlib import Path
 from argparse import ArgumentParser
 import json

@@ -214,8 +214,8 @@ def detect_onsets(odf_rate, odfs, options):
     Detect onsets in the onset detection function.
     Returns the positions in seconds.
     """
-    onsets_hf = detect_onsets_stddev(odf_rate, odfs[0], options, False)
-    onsets_phase_dev = detect_onsets_stddev(odf_rate, odfs[1], options, True)
+    onsets_hf = detect_onsets_stddev(odf_rate, odfs[0], options)
+    onsets_phase_dev = detect_onsets_stddev(odf_rate, odfs[1], options)
     onsets_lfsf = detect_onsets_lfsf(odf_rate, odfs[2], options)
 
     # combine all onset timestamps into one single array
@@ -255,7 +255,7 @@ def detect_onsets(odf_rate, odfs, options):
 
     return onsets_final
 
-def detect_onsets_stddev(odf_rate, odf, options, need_phase_correction):
+def detect_onsets_stddev(odf_rate, odf, options):
     """
     Detect onsets in the onset detection function.
     Returns the positions in seconds.

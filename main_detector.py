@@ -307,7 +307,21 @@ def detect_tempo(sample_rate, signal, fps, spect, magspect, melspect,
     # it uses the time difference between the first two onsets to
     # define the tempo, and returns half of that as a second guess.
     # this is not a useful solution at all, just a placeholder.
-    tempo = 60 / (onsets[1] - onsets[0])
+    min_bpm=60
+    max_bpm=240
+    odf_signal=odf[2]
+    autocorrelation=np.correlate(odf_signal,odf_signal,mode='full')
+    autocorrelation=autocorrelation [len(odf_signal)-1:]
+    min_lag = int(odf_rate * 60 / max_bpm)
+    max_lag = int(odf_rate * 60 / min_bpm)
+    range=autocorrelation[min_lag:max_lag]
+    prob_peak=np.argmax(range)+min_lag
+    tempo_est=60/(prob_peak/odf_rate)
+    if tempo_est<120:
+        tempo=tempo_est*2
+    else:
+        tempo=tempo_est
+
     return [tempo / 2, tempo]
 
 
@@ -320,7 +334,11 @@ def detect_beats(sample_rate, signal, fps, spect, magspect, melspect,
     # we only have a dumb dummy implementation here.
     # it returns every 10th onset as a beat.
     # this is not a useful solution at all, just a placeholder.
-    return onsets[::10]
+    interval=(60/tempo[0])
+    first=onsets[0]
+    last=(len(odf[2])-1)/odf_rate
+    all_beats=np.arange(first,last,interval)
+    return all_beats
 
 
 def main():

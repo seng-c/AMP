@@ -16,10 +16,9 @@ import json
 
 import numpy as np
 from librosa import iirt
-from librosa.filters import semitone_filterbank
 from scipy.io import wavfile
 import librosa
-from scipy.ndimage import maximum_filter, maximum_filter1d, median_filter
+from scipy.ndimage import maximum_filter
 
 try:
     import tqdm
@@ -99,6 +98,12 @@ def detect_everything(filename, options):
 
     # set tempo to be only the tempo without index of original tempo estimation
     tempo = tempo[0]
+
+    # set odf to a single odf out of the three calculated ones
+    # 1) high frequency content
+    # 2) phase deviation
+    # 3) lfsf
+    odf = odfs[2]
 
     # plot some things for easier debugging, if asked for it
     if options.plot:
@@ -282,7 +287,8 @@ def detect_onsets_lfsf(odf_rate, odf, options):
 
     # get maxima and mean in window
     local_maxima = maximum_filter(odf, window_size)
-    local_mean = median_filter(odf, window_size)
+    filt = np.ones(window_size) / window_size
+    local_mean = np.convolve(odf, filt, mode='same')
 
     # get possible peak positions
     is_peak_maxima = odf == local_maxima
@@ -310,8 +316,8 @@ def detect_tempo(sample_rate, signal, fps, spect, magspect, melspect,
     Returns one tempo or two tempo estimations (and which one is the original estimation).
     """
     # set expected/viable BPM range
-    min_bpm = 60
-    max_bpm = 200
+    min_bpm = 50
+    max_bpm = 220
     # select one of the three onset detection functions
     # 1) high frequency content
     # 2) phase deviation

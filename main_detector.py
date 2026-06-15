@@ -265,11 +265,8 @@ def detect_onsets_stddev(odf_rate, odf, options, need_phase_correction):
                      & (odf[1:-1] > odf[2:])
                      & (odf[1:-1] > peaks_smoothed[1:-1] + delta))
 
-    # correct offset (for phase deviation necessary) and transform to seconds
-    if need_phase_correction:
-        onsets = (peaks[0] + 1.0) / odf_rate
-    else:
-        onsets = peaks[0] / odf_rate
+    # correct offset and transform to seconds
+    onsets = (peaks[0] + 1.0) / odf_rate
 
     if len(onsets) == 0:
         return []
